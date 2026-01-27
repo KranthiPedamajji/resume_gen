@@ -9,6 +9,8 @@ HARD RULES (non-negotiable):
 - Do NOT claim hands-on experience with a tool unless it clearly appears in the snippets.
 - If the JD mentions a skill not supported by snippets, either omit it or phrase as "familiar with" / "exposed to" (conservative).
 - Keep output ATS-friendly: simple headings, clean bullets, no tables.
+- Each bullet must include an action plus an outcome. If no measured result is in the snippets, use a conservative purpose clause
+  (e.g., "to improve maintainability", "to reduce manual effort") and avoid inventing numbers or overstated impact.
 
 ADDITIONAL GUIDANCE:
 - Prefer evidence marked support_level=direct when asserting skills or experience.
@@ -217,6 +219,7 @@ Quality bar:
 - Prioritize relevance to JD.
 - Keep bullets punchy (1-2 lines each).
 - Do not repeat the same bullet wording.
+- Every bullet should follow Action + Outcome (impact or purpose). Avoid empty phrases like "worked on" or "responsible for".
 """
 
     if not experience_inventory:
@@ -266,6 +269,7 @@ Quality bar:
 - Prefer direct evidence; be conservative with derived evidence.
 - Keep bullets concise and ATS-friendly.
 - Do not repeat the same bullet wording.
+- Every bullet should follow Action + Outcome (impact or purpose). Avoid filler adverbs and vague claims.
 """
 
 BULLET_REWRITE_SYSTEM_PROMPT = """You rewrite a single resume bullet.
@@ -277,6 +281,7 @@ HARD RULES:
 - Do NOT introduce new responsibilities not in the original bullet.
 - Do NOT use markdown, quotes, or bullet prefixes in the output.
 - If you cannot improve without adding facts, return the original bullet unchanged.
+- Add a brief outcome or purpose clause when possible (e.g., "to improve reliability") without inventing metrics.
 """
 
 

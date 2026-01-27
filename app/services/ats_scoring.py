@@ -97,7 +97,10 @@ def score_resume_against_jd(
     if req_total or pref_total:
         req_ratio = (req_covered / req_total) if req_total else 0
         pref_ratio = (pref_covered / pref_total) if pref_total else 0
-        score = round(req_ratio * 70 + pref_ratio * 30)
+        if pref_total == 0:
+            score = round(req_ratio * 100)
+        else:
+            score = round(req_ratio * 70 + pref_ratio * 30)
     score = max(0, min(100, score))
 
     missing_required = [item.skill for item in req_coverage if item.status == "missing"]
