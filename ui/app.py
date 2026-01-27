@@ -70,6 +70,9 @@ with st.expander("Load Existing Resume ID", expanded=False):
                 st.session_state.resume_id = resume_id_input.strip()
                 st.session_state.resume_state = res["data"].get("state")
                 st.session_state.resume_text_preview = extract_resume_text(st.session_state.resume_state)
+                jd_loaded = res["data"].get("jd_text")
+                if jd_loaded:
+                    st.session_state.jd_text = jd_loaded
                 st.success("Loaded resume state")
             else:
                 st.error(res["error"])
@@ -141,6 +144,11 @@ with st.expander("Job Info + Generation", expanded=True):
 
 # C) ATS Score + Skill Gaps
 with st.expander("ATS Score + Skill Gaps", expanded=False):
+    if not st.session_state.jd_text.strip():
+        st.text_area("JD text (required for ATS)", key="jd_text_ats", height=140)
+        if st.session_state.get("jd_text_ats"):
+            st.session_state.jd_text = st.session_state.jd_text_ats
+
     if st.button("Run ATS Score"):
         if not st.session_state.resume_id:
             st.error("resume_id required")
@@ -188,7 +196,83 @@ with st.expander("ATS Score + Skill Gaps", expanded=False):
         st.dataframe(required_rows, use_container_width=True)
         st.subheader("Preferred Skills")
         st.dataframe(preferred_rows, use_container_width=True)
-        st.write("Missing Required:", report.get("missing_required", []))
+        missing_required = report.get("missing_required", [])
+        missing_preferred = report.get("missing_preferred", [])
+        st.write("Missing Required:", missing_required)
+
+        if missing_required or missing_preferred:
+            st.subheader("Why score is low")
+            if missing_required:
+                st.write("Missing Required:", missing_required)
+            if missing_preferred:
+                st.write("Missing Preferred:", missing_preferred)
+
+            with st.expander("Include excluded skills (I have this skill)", expanded=False):
+                if not st.session_state.resume_state:
+                    state_res = client.get(f"/resumes/{st.session_state.resume_id}")
+                    if state_res["ok"]:
+                        st.session_state.resume_state = state_res["data"].get("state")
+                roles = role_options(st.session_state.resume_state or {})
+                role_labels = [r[0] for r in roles]
+                role_ids = [r[1] for r in roles]
+
+                selected_items = []
+                all_missing = list(missing_required) + list(missing_preferred)
+                for idx, skill in enumerate(all_missing):
+                    include_key = f"include_skill_{idx}"
+                    role_key = f"include_role_{idx}"
+                    level_key = f"include_level_{idx}"
+                    bullet_key = f"include_bullet_{idx}"
+
+                    if st.checkbox(f"Include: {skill}", key=include_key):
+                        if roles:
+                            role_choice = st.selectbox(
+                                f"Target Role for {skill}",
+                                role_labels,
+                                key=role_key,
+                            )
+                            role_id = role_ids[role_labels.index(role_choice)]
+                        else:
+                            role_id = ""
+                            st.warning("No roles available in resume state.")
+
+                        level = st.selectbox(
+                            f"Evidence Level for {skill}",
+                            options=["hands_on", "worked_with", "exposure"],
+                            key=level_key,
+                        )
+                        proof = st.text_area(
+                            f"Proof bullet for {skill}",
+                            key=bullet_key,
+                            placeholder="Describe how you used this skill in a role...",
+                        )
+
+                        selected_items.append({
+                            "skill": skill,
+                            "level": level,
+                            "role_id": role_id,
+                            "proof_bullet": proof,
+                        })
+
+                if st.button("Include Selected Skills"):
+                    if not selected_items:
+                        st.error("Select at least one skill to include")
+                    else:
+                        invalid = [item for item in selected_items if not item["role_id"] or not item["proof_bullet"].strip()]
+                        if invalid:
+                            st.error("Each selected skill needs a role and a proof bullet")
+                        else:
+                            payload = {"items": selected_items}
+                            res = client.post(
+                                f"/resumes/{st.session_state.resume_id}/overrides/from-blocked",
+                                json_body=payload,
+                            )
+                            if res["ok"]:
+                                st.success("Skills added. Run Suggest Patches to apply.")
+                            else:
+                                st.error(res["error"])
+        else:
+            st.info("All required skills are covered. Score may be capped if preferred skills are not detected.")
 
 # D) Blocked Plan + Overrides
 with st.expander("Blocked Plan + Overrides (Remediation)", expanded=False):
@@ -259,7 +343,7 @@ with st.expander("Blocked Plan + Overrides (Remediation)", expanded=False):
                     key=f"blocked_bullet_{idx}",
                 )
 
-                if st.button(f"Save Override for {skill}", key=f"blocked_save_{idx}"):
+                if st.button(f"Save Override for {skill}"):
                     if not role_id:
                         st.error("Role is required")
                     elif not bullet_text.strip():
@@ -286,6 +370,60 @@ with st.expander("Blocked Plan + Overrides (Remediation)", expanded=False):
                             st.error(res["error"])
 
             st.write(f"Overrides Saved: {st.session_state.overrides_saved_count}")
+
+            st.markdown("---")
+            st.subheader("Add Override Manually")
+            manual_skill = st.text_input("Skill", key="manual_override_skill")
+            manual_level = st.selectbox(
+                "Level",
+                options=["hands_on", "worked_with", "exposure"],
+                key="manual_override_level",
+            )
+            if not st.session_state.resume_state:
+                res_state = client.get(f"/resumes/{st.session_state.resume_id}")
+                if res_state["ok"]:
+                    st.session_state.resume_state = res_state["data"].get("state")
+            roles = role_options(st.session_state.resume_state or {})
+            role_labels = [r[0] for r in roles]
+            role_ids = [r[1] for r in roles]
+            if roles:
+                manual_role_label = st.selectbox("Target Role", role_labels, key="manual_override_role")
+                manual_role_id = role_ids[role_labels.index(manual_role_label)]
+            else:
+                manual_role_id = ""
+                st.warning("No roles available in resume state.")
+            manual_bullet = st.text_area(
+                "Proof Bullet",
+                key="manual_override_bullet",
+                height=80,
+            )
+            if st.button("Save Manual Override"):
+                if not manual_skill.strip():
+                    st.error("Skill is required")
+                elif not manual_role_id:
+                    st.error("Role is required")
+                elif not manual_bullet.strip():
+                    st.error("Proof bullet is required")
+                else:
+                    payload = {
+                        "items": [
+                            {
+                                "skill": manual_skill.strip(),
+                                "level": manual_level,
+                                "role_id": manual_role_id,
+                                "proof_bullet": manual_bullet.strip(),
+                            }
+                        ]
+                    }
+                    res = client.post(
+                        f"/resumes/{st.session_state.resume_id}/overrides/from-blocked",
+                        json_body=payload,
+                    )
+                    if res["ok"]:
+                        st.session_state.overrides_saved_count += 1
+                        st.success("Manual override saved")
+                    else:
+                        st.error(res["error"])
 
 # E) Suggest + Apply Patches
 with st.expander("Suggest + Apply Patches (Auto Fix)", expanded=False):
@@ -367,14 +505,32 @@ with st.expander("Manual Bullet Edit", expanded=False):
             if bullets:
                 idx = st.selectbox("Bullet Index", list(range(len(bullets))), key="manual_bullet_index")
                 new_bullet = st.text_area("Edit Bullet", value=bullets[idx], key="manual_bullet_text")
+                rewrite_hint = st.text_input("Rewrite hint (optional, requires override)", key="rewrite_hint")
+                override_skill = st.text_input("Override skill to allow (required if hint adds a new tool)", key="override_skill")
+                if st.button("Rewrite with Claude", key="rewrite_bullet"):
+                    payload = {
+                        "role_selector": {"role_id": role_id},
+                        "bullet_index": idx,
+                        "jd_text": st.session_state.jd_text or None,
+                    }
+                    if rewrite_hint:
+                        payload["rewrite_hint"] = rewrite_hint
+                        payload["override_skill"] = override_skill or None
+                    res = client.post(f"/resumes/{st.session_state.resume_id}/rewrite-bullet", json_body=payload)
+                    if res["ok"]:
+                        st.session_state.manual_bullet_text = res["data"].get("rewritten_bullet", "")
+                        st.success("Rewrite ready. Review and click Save Bullet to apply.")
+                    else:
+                        st.error(res["error"])
                 if st.button("Save Bullet"):
-                    if len(new_bullet.strip()) < 10:
+                    updated_bullet = st.session_state.get("manual_bullet_text", new_bullet)
+                    if len(updated_bullet.strip()) < 10:
                         st.error("Bullet too short (min 10 chars)")
                     else:
                         payload = {
                             "role_selector": {"role_id": role_id},
                             "bullet_index": idx,
-                            "new_bullet": new_bullet,
+                            "new_bullet": updated_bullet,
                             "export_docx": False,
                         }
                         res = client.patch(f"/resumes/{st.session_state.resume_id}/bullet", json_body=payload)

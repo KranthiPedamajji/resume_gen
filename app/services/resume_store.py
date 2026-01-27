@@ -130,6 +130,16 @@ def load_latest_state(root_dir: Path, resume_id: str) -> Tuple[ResumeState, str]
     return load_resume_state(root_dir, resume_id, version=None)
 
 
+def load_latest_jd_text(root_dir: Path, resume_id: str) -> Optional[str]:
+    """Load the latest available job_description.txt for a resume_id."""
+    resume_dir = root_dir / resume_id
+    meta = load_meta(resume_dir)
+    jd_path = _latest_file(meta, "job_description")
+    if jd_path and jd_path.exists():
+        return jd_path.read_text(encoding="utf-8")
+    return None
+
+
 def load_meta(resume_dir: Path) -> Dict[str, Any]:
     meta_path = resume_dir / "meta.json"
     if not meta_path.exists():

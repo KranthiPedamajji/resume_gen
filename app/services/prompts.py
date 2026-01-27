@@ -267,3 +267,56 @@ Quality bar:
 - Keep bullets concise and ATS-friendly.
 - Do not repeat the same bullet wording.
 """
+
+BULLET_REWRITE_SYSTEM_PROMPT = """You rewrite a single resume bullet.
+
+HARD RULES:
+- Keep the meaning and scope of the original bullet.
+- Do NOT add new tools, metrics, certifications, dates, or companies, except skills explicitly listed under ALLOWED ADDITIONS.
+- You may mention ONLY the skills listed in ALLOWED ADDITIONS (if any). Do not add any other new tools.
+- Do NOT introduce new responsibilities not in the original bullet.
+- Do NOT use markdown, quotes, or bullet prefixes in the output.
+- If you cannot improve without adding facts, return the original bullet unchanged.
+"""
+
+
+def build_bullet_rewrite_prompt(
+    jd_text: str | None,
+    role_info: dict,
+    original_bullet: str,
+    neighbor_bullets: list[str] | None = None,
+    rewrite_hint: str | None = None,
+    allowed_additions: list[str] | None = None,
+) -> str:
+    """Build a prompt for rewriting a single bullet conservatively."""
+    neighbor_text = "\n".join(neighbor_bullets or [])
+    role_line = (
+        f"Company: {role_info.get('company','')}\n"
+        f"Title: {role_info.get('title','')}\n"
+        f"Location: {role_info.get('location','')}\n"
+        f"Dates: {role_info.get('dates','')}"
+    )
+    allowed_text = ", ".join(allowed_additions or []) if allowed_additions else "None"
+    hint_text = rewrite_hint or ""
+    return f"""JOB DESCRIPTION (for alignment only):
+{jd_text or ''}
+
+ROLE CONTEXT:
+{role_line}
+
+NEIGHBOR BULLETS (context only, do not copy new facts):
+{neighbor_text}
+
+ALLOWED ADDITIONS (validated overrides only):
+{allowed_text}
+
+USER REWRITE HINT (optional):
+{hint_text}
+
+ORIGINAL BULLET:
+{original_bullet}
+
+TASK:
+Rewrite the bullet to be clearer and more ATS-friendly while preserving facts.
+Return ONLY the rewritten bullet text (no prefix, no quotes).
+"""

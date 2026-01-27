@@ -157,10 +157,27 @@ class BulletEditResponse(BaseModel):
     paths: Dict[str, Optional[str]]
 
 
+class BulletRewriteRequest(BaseModel):
+    role_selector: RoleSelector
+    bullet_index: int = Field(..., ge=0)
+    jd_text: Optional[str] = None
+    rewrite_hint: Optional[str] = None
+    override_skill: Optional[str] = None
+    temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+
+
+class BulletRewriteResponse(BaseModel):
+    resume_id: str
+    role_id: str
+    bullet_index: int
+    original_bullet: str
+    rewritten_bullet: str
+
 class ResumeStateResponse(BaseModel):
     resume_id: str
     version: str
     state: ResumeState
+    jd_text: Optional[str] = None
 
 
 class AtsScoreRequest(BaseModel):
@@ -306,3 +323,4 @@ class OverridesFromBlockedResponse(BaseModel):
     resume_id: str
     overrides_path: str
     overrides: OverridesRequest
+

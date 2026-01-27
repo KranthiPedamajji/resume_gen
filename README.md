@@ -183,3 +183,15 @@ curl -X POST http://127.0.0.1:8000/resumes/<resume_id>/apply-patches -H "Content
   "truth_mode": "strict"
 }'
 ```
+
+## Rewrite a bullet with Claude (optional)
+
+This does NOT apply the change automatically. It returns a suggested rewrite you can review and then save via PATCH /resumes/{resume_id}/bullet.
+
+```
+curl -X POST http://127.0.0.1:8000/resumes/<resume_id>/rewrite-bullet -H "Content-Type: application/json" -d '{
+  "role_selector": { "role_id": "<role_id>" },
+  "bullet_index": 2,
+  "jd_text": "..."
+}'
+```

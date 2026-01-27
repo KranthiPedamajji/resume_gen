@@ -3,13 +3,17 @@ from pathlib import Path
 import re
 
 from app.config import settings
-from app.models.schemas import BulletEditRequest, BulletEditResponse, ResumeStateResponse
+from app.models.schemas import BulletEditRequest, BulletEditResponse, ResumeStateResponse, BulletRewriteRequest, BulletRewriteResponse
 from app.services.resume_store import (
     load_resume_state,
     append_resume_version,
     update_version_docx_path,
+    load_latest_jd_text,
 )
+from app.services.resume_overrides import load_overrides
 from app.services.docx_exporter import export_docx_from_state
+from app.services.claude_client import generate_with_claude
+from app.services.prompts import BULLET_REWRITE_SYSTEM_PROMPT, build_bullet_rewrite_prompt
 
 
 router = APIRouter()
@@ -22,7 +26,9 @@ def get_resume(resume_id: str) -> ResumeStateResponse:
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="resume_id not found")
 
-    return ResumeStateResponse(resume_id=resume_id, version=version, state=state)
+    jd_text = load_latest_jd_text(settings.generated_resumes_dir, resume_id)
+
+    return ResumeStateResponse(resume_id=resume_id, version=version, state=state, jd_text=jd_text)
 
 
 @router.patch("/resumes/{resume_id}/bullet", response_model=BulletEditResponse)
@@ -81,6 +87,84 @@ def edit_bullet(resume_id: str, payload: BulletEditRequest) -> BulletEditRespons
     )
 
 
+
+@router.post("/resumes/{resume_id}/rewrite-bullet", response_model=BulletRewriteResponse)
+def rewrite_bullet(resume_id: str, payload: BulletRewriteRequest) -> BulletRewriteResponse:
+    try:
+        state, _ = load_resume_state(settings.generated_resumes_dir, resume_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="resume_id not found")
+
+    role_index = _select_role_index(state.sections.experience, payload.role_selector)
+    role = state.sections.experience[role_index]
+
+    if payload.bullet_index < 0 or payload.bullet_index >= len(role.bullets):
+        raise HTTPException(status_code=422, detail="bullet_index out of range")
+
+    original_bullet = role.bullets[payload.bullet_index]
+    neighbors = []
+    if payload.bullet_index - 1 >= 0:
+        neighbors.append(role.bullets[payload.bullet_index - 1])
+    if payload.bullet_index + 1 < len(role.bullets):
+        neighbors.append(role.bullets[payload.bullet_index + 1])
+
+    role_info = {
+        "company": role.company,
+        "title": role.title or "",
+        "location": role.location or "",
+        "dates": role.dates or "",
+    }
+
+    rewrite_hint = (payload.rewrite_hint or "").strip()
+    allowed_additions = []
+    if rewrite_hint:
+        override_skill = (payload.override_skill or "").strip()
+        if not override_skill:
+            raise HTTPException(status_code=422, detail="override_skill is required when rewrite_hint is provided")
+        overrides = load_overrides(settings.generated_resumes_dir, resume_id)
+        if not overrides or not overrides.skills:
+            raise HTTPException(status_code=422, detail="No overrides found for resume_id")
+        override_names = {entry.skill.strip().lower() for entry in overrides.skills}
+        if override_skill.lower() not in override_names:
+            raise HTTPException(status_code=422, detail="override_skill not found in overrides")
+        allowed_additions = [override_skill]
+
+    user_prompt = build_bullet_rewrite_prompt(
+        payload.jd_text,
+        role_info,
+        original_bullet,
+        neighbor_bullets=neighbors,
+        rewrite_hint=rewrite_hint or None,
+        allowed_additions=allowed_additions,
+    )
+
+    try:
+        rewritten = generate_with_claude(
+            api_key=settings.anthropic_api_key,
+            model=settings.claude_model,
+            system_prompt=BULLET_REWRITE_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_tokens=160,
+            temperature=payload.temperature,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Claude rewrite failed: {exc}")
+
+    cleaned = _clean_bullet(rewritten)
+    if not cleaned:
+        cleaned = original_bullet
+
+    return BulletRewriteResponse(
+        resume_id=resume_id,
+        role_id=role.role_id,
+        bullet_index=payload.bullet_index,
+        original_bullet=original_bullet,
+        rewritten_bullet=cleaned,
+    )
+
+
 def _select_role_index(roles, selector) -> int:
     role_id = (selector.role_id or "").strip()
     company = (selector.company or "").strip()
@@ -117,3 +201,7 @@ def _clean_bullet(text: str) -> str:
     if len(cleaned) < 10 or len(cleaned) > 300:
         return ""
     return cleaned
+
+
+
+
