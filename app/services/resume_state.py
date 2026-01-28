@@ -54,6 +54,61 @@ def parse_resume_text_to_state(resume_text: str) -> ResumeState:
     )
 
 
+def render_resume_text(state: ResumeState) -> str:
+    """Render a ResumeState back into a simple text resume format."""
+    lines: List[str] = []
+
+    if state.header.name:
+        lines.append(state.header.name)
+    if state.header.location_line:
+        lines.append(state.header.location_line)
+    if state.header.contact_line:
+        lines.append(state.header.contact_line)
+
+    if lines:
+        lines.append("")
+
+    if state.sections.professional_summary:
+        lines.append("PROFESSIONAL SUMMARY")
+        lines.append(state.sections.professional_summary.strip())
+        lines.append("")
+
+    if state.sections.technical_skills:
+        lines.append("TECHNICAL SKILLS")
+        lines.extend(state.sections.technical_skills)
+        lines.append("")
+
+    if state.sections.experience:
+        lines.append("PROFESSIONAL EXPERIENCE")
+        for role in state.sections.experience:
+            header = _format_role_header(role)
+            lines.append(header)
+            for bullet in role.bullets:
+                lines.append(f"- {bullet}")
+            lines.append("")
+
+    if state.sections.education:
+        lines.append("EDUCATION")
+        lines.extend(state.sections.education)
+
+    return "\n".join(lines).strip()
+
+
+def _format_role_header(role: ExperienceRole) -> str:
+    parts = [role.company]
+    if role.title:
+        parts.append(role.title)
+    header = " - ".join(parts) if len(parts) > 1 else parts[0]
+    tail = []
+    if role.location:
+        tail.append(role.location)
+    if role.dates:
+        tail.append(role.dates)
+    if tail:
+        header = f"{header} | " + " | ".join(tail)
+    return header
+
+
 def _split_header(lines: List[str]) -> tuple[List[str], List[str]]:
     header = []
     body = []

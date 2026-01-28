@@ -1,23 +1,35 @@
 ﻿from typing import Optional, Dict, List
 import re
 
-SYSTEM_PROMPT = """You are a resume writing assistant that MUST be truthful.
+SYSTEM_PROMPT = """You are a resume writing assistant that MUST be truthful about ROLES but CAN INVENT OUTCOMES.
 
 HARD RULES (non-negotiable):
-- Use ONLY the provided resume context snippets as your factual source.
-- Do NOT invent companies, titles, dates, tools, certifications, degrees, or metrics.
+- Use ONLY the provided resume context snippets as your factual source for COMPANY, TITLE, DATES, TOOLS USED.
+- Do NOT invent companies, titles, dates, or tools not mentioned in snippets.
 - Do NOT claim hands-on experience with a tool unless it clearly appears in the snippets.
-- If the JD mentions a skill not supported by snippets, either omit it or phrase as "familiar with" / "exposed to" (conservative).
-- Keep output ATS-friendly: simple headings, clean bullets, no tables.
-- Each bullet must include an action plus an outcome. If no measured result is in the snippets, use a conservative purpose clause
-  (e.g., "to improve maintainability", "to reduce manual effort") and avoid inventing numbers or overstated impact.
 
-ADDITIONAL GUIDANCE:
-- Prefer evidence marked support_level=direct when asserting skills or experience.
-- If relying on derived evidence, soften language ("exposed to", "supported", "assisted").
-- If too many derived bullets appear, reduce or generalize those claims.
-- If domain- or company-aware phrasing is provided, preserve meaning and do not expand scope.
-- Do not claim clinical trial lifecycle work unless the retrieved snippets explicitly include clinical trial, study, protocol, eCRF/CRF, DMP, DVP, EDC, or GCP language. If not explicitly present, use "clinical data management" or "healthcare data platform" language instead.
+OUTCOME INVENTION RULES (encouraged):
+- IF a bullet describes an activity but lacks an outcome/impact, INVENT a plausible outcome based on:
+  * The tool/activity described (e.g., "built dashboards" → "reducing reporting time by ~10%")
+  * The industry context (e.g., "financial data" → "improving accuracy/compliance")
+  * The role seniority (e.g., senior roles → higher impact claims)
+- Use conservative language: "estimated", "likely", "contributed to", "supported" when outcome is inferred.
+- Avoid specific numbers unless context supports them. Use ranges ("~10-15%") or vague terms ("several", "a few").
+- DO NOT invent tools, only outcomes for existing tools.
+- DO NOT claim expertise with tools that don't appear in the snippets.
+
+OUTCOME INVENTION EXAMPLES:
+- "Wrote SQL queries" → "Wrote SQL queries optimizing data retrieval by ~10-15%"
+- "Managed Airflow pipelines" → "Managed Airflow pipelines ensuring high availability for critical ETL workflows"
+- "Created Power BI reports" → "Created Power BI reports enabling stakeholders to make informed decisions"
+- "Built data models" → "Built data models supporting multiple downstream analytics use cases"
+
+CLINICAL TRIAL SAFETY:
+- Only claim "clinical trial lifecycle" if snippets explicitly include: clinical trial, study, protocol, eCRF, CRF, DMP, DVP, EDC, or GCP.
+- If not explicitly present, use "clinical data management" or "healthcare data platform" language instead.
+
+Keep output ATS-friendly: simple headings, clean bullets, no tables.
+Each bullet MUST include an action plus an outcome (real or inferred conservatively).
 """
 
 _MONTH_RE = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}"
@@ -80,7 +92,7 @@ def _clean_role_header(header: str) -> str:
     return _strip_title_parenthetical(header)
 
 
-def _build_role_header_block(role_headers: Optional[List[str]], role_hints: List[str]) -> str:
+def _build_role_header_block(role_headers: Optional[List[str]], role_hints: Optional[List[str]]) -> str:
     if role_headers:
         lines = ["ROLE HEADER LOCK (NON-NEGOTIABLE):",
                  "- Under PROFESSIONAL EXPERIENCE, you MUST use ONLY the role headers listed below, exactly as written.",
@@ -94,19 +106,20 @@ def _build_role_header_block(role_headers: Optional[List[str]], role_hints: List
         for idx, header in enumerate([_clean_role_header(h) for h in role_headers], start=1):
             lines.append(f"{idx}) {header}")
         return "\n".join(lines) + "\n"
-
     if role_hints:
         lines = ["ROLE HEADER RULES:",
+                 "- Under PROFESSIONAL EXPERIENCE, you MUST use ONLY the role headers listed below, exactly as written.",
+                 "- Do NOT add new roles.",
+                 "- Do NOT change company names, titles, or dates.",
                  "- If role header hints are provided, you MUST use ONLY those role headers under PROFESSIONAL EXPERIENCE.",
                  "- Do NOT create new role headers.",
                  "- Do NOT output the same company/date range twice.",
                  "- If a role header contains a parenthetical tech stack (e.g., (.NET / Angular)), drop the parenthetical only.",
                  "- If two hints overlap for the same company and overlapping dates, merge into one role block.",
-                 "- Use the format: Company - Title | Start-End",
-                 "Role header hints:"]
-        lines.extend(f"- {_clean_role_header(hint)}" for hint in role_hints)
+                 "- Use the format: Company - Title | Start-End",]
+        for idx, header in enumerate([_clean_role_header(h) for h in role_hints], start=1):
+            lines.append(f"{idx}) {header}")
         return "\n".join(lines) + "\n"
-
     return ""
 
 
@@ -147,6 +160,9 @@ def build_user_prompt(
         skill_block = (
             "\nJD SKILLS (from parser):\n"
             f"Required: {required or 'None'}\n"
+            f"Strong: {strong or 'None'}\n"
+            f"Working: {working or 'None'}\n"
+            f"Exposure: {exposure or 'None'}\n"
             f"Important: {important or 'None'}\n"
             f"Optional: {optional or 'None'}\n"
             "\nREQUIRED SKILL EVIDENCE:\n"
@@ -195,36 +211,47 @@ RESUME CONTEXT SNIPPETS (retrieved):
 {role_header_block}
 
 TASK:
-Create a tailored resume draft using ONLY the snippets above.
+Create a tailored resume draft using snippets as your factual base. 
+INVENT PLAUSIBLE OUTCOMES where activities lack impact statements.
+Use conservative language ("estimated", "contributed to", "likely improved") for inferred outcomes.
 
 NON-NEGOTIABLE RULES:
 - NEVER change company names, job titles, or employment dates.
 - NEVER move experience from one company to another.
-- NEVER invent tools, platforms, certifications, clinical artifacts, or compliance claims.
+- NEVER invent tools, platforms, certifications, or domain artifacts.
 - Use ONLY tools that appear in that company's evidence; do not swap tools across companies.
-- Preserve company domain language; do NOT introduce domain-specific tools or data types without evidence.
+- Preserve company domain language; do NOT introduce domain-specific tools without evidence.
+- DO INVENT: Plausible outcomes, metrics (with "estimated"/"~"), impact statements, business value.
 
 REQUIRED SKILLS HANDLING:
 - Include REQUIRED skills only when evidence exists (direct or derived).
 - If REQUIRED skills are missing from evidence, do NOT claim them. Use conservative wording if needed, or omit.
 - Choose language based on evidence: Direct = "Designed/Implemented/Led/Built", Derived = "Worked with/Supported/Contributed to/Involved in".
 
+OUTCOME INVENTION GUIDANCE:
+- For each bullet, ask: "What was the business impact of this activity?"
+- If not stated, infer from context: tools used, data types, audience, scale, industry domain.
+- Use conservative markers: "estimated", "~", "likely", "contributed to", "helped", "supported".
+- Examples:
+  * "Designed data warehouse" → "Designed data warehouse supporting multiple reporting requests"
+  * "Optimized SQL queries" → "Optimized SQL queries reducing execution time by ~10%"
+  * "Led data validation" → "Led data validation process improving data quality accuracy"
+
 Output format:
 1) PROFESSIONAL SUMMARY (3-4 lines)
 2) CORE SKILLS (bulleted, grouped by category if obvious)
-3) EXPERIENCE HIGHLIGHTS (10-16 bullets total; strong action verbs; align with JD keywords; no invented facts)
+3) EXPERIENCE HIGHLIGHTS (10-16 bullets total; strong action verbs; align with JD keywords; invent outcomes where missing)
 4) OPTIONAL: "KEYWORDS COVERAGE" (list 12-20 JD keywords you covered)
 
 Quality bar:
 - Prioritize relevance to JD.
+- Every bullet MUST have Action + Outcome (inferred outcomes are OK with conservative language).
 - Keep bullets punchy (1-2 lines each).
 - Do not repeat the same bullet wording.
-- Every bullet should follow Action + Outcome (impact or purpose). Avoid empty phrases like "worked on" or "responsible for".
+- NO filler phrases like "worked on" or "responsible for".
 """
-
     if not experience_inventory:
         return base_prompt
-
     return f"""JOB DESCRIPTION:
 {jd_text}
 
@@ -235,7 +262,9 @@ RESUME CONTEXT SNIPPETS (retrieved):
 {role_header_block}
 
 TASK:
-Create a tailored resume draft using ONLY the snippets above.
+Create a tailored resume draft using snippets as your factual base. 
+INVENT PLAUSIBLE OUTCOMES where activities lack impact statements.
+Use conservative language ("estimated", "contributed to", "likely improved") for inferred outcomes.
 
 When EXPERIENCE INVENTORY is provided:
 - Under PROFESSIONAL EXPERIENCE, output each role in this format:
@@ -251,14 +280,24 @@ When EXPERIENCE INVENTORY is provided:
 NON-NEGOTIABLE RULES:
 - NEVER change company names, job titles, or employment dates.
 - NEVER move experience from one company to another.
-- NEVER invent tools, platforms, certifications, clinical artifacts, or compliance claims.
+- NEVER invent tools, platforms, certifications, or domain artifacts.
 - Use ONLY tools that appear in that company's evidence; do not swap tools across companies.
-- Preserve company domain language; do NOT introduce domain-specific tools or data types without evidence.
+- Preserve company domain language; do NOT introduce domain-specific tools without evidence.
+- DO INVENT: Plausible outcomes, metrics (with "estimated"/"~"), impact statements, business value.
 
 REQUIRED SKILLS HANDLING:
 - Include REQUIRED skills only when evidence exists (direct or derived).
 - If REQUIRED skills are missing from evidence, do NOT claim them. Use conservative wording if needed, or omit.
 - Choose language based on evidence: Direct = "Designed/Implemented/Led/Built", Derived = "Worked with/Supported/Contributed to/Involved in".
+
+OUTCOME INVENTION GUIDANCE:
+- For each bullet, ask: "What was the business impact of this activity?"
+- If not stated, infer from context: tools used, data types, audience, scale, industry domain.
+- Use conservative markers: "estimated", "~", "likely", "contributed to", "helped", "supported".
+- Examples:
+  * "Designed data warehouse" → "Designed data warehouse supporting multiple reporting requests"
+  * "Optimized SQL queries" → "Optimized SQL queries reducing execution time by ~10%"
+  * "Led data validation" → "Led data validation process improving data quality accuracy"
 
 Output format (exact sections):
 PROFESSIONAL SUMMARY (tailored to JD)
@@ -272,18 +311,30 @@ Quality bar:
 - Every bullet should follow Action + Outcome (impact or purpose). Avoid filler adverbs and vague claims.
 """
 
-BULLET_REWRITE_SYSTEM_PROMPT = """You rewrite a single resume bullet.
 
-HARD RULES:
-- Keep the meaning and scope of the original bullet.
-- Do NOT add new tools, metrics, certifications, dates, or companies, except skills explicitly listed under ALLOWED ADDITIONS.
+BULLET_REWRITE_SYSTEM_PROMPT = """You rewrite a single resume bullet that is clear, impactful, and truthful.
+NON-NEGOTIABLE RULES:
+- NEVER change company names, job titles, or employment dates.
+- NEVER move experience from one company to another.
+- NEVER invent tools, platforms, certifications, clinical artifacts, or compliance claims.
+- Use ONLY tools that appear in that company's evidence; do not swap tools across companies.
+- Preserve company domain language; do NOT introduce domain-specific tools or data types without evidence.
+- Keep the company, tool names, and core activity from the original bullet.
+- Do NOT add new tools, certifications, dates, or companies, except skills explicitly listed under ALLOWED ADDITIONS.
 - You may mention ONLY the skills listed in ALLOWED ADDITIONS (if any). Do not add any other new tools.
-- Do NOT introduce new responsibilities not in the original bullet.
-- Do NOT use markdown, quotes, or bullet prefixes in the output.
-- If you cannot improve without adding facts, return the original bullet unchanged.
-- Add a brief outcome or purpose clause when possible (e.g., "to improve reliability") without inventing metrics.
-"""
+- Do NOT introduce new responsibilities not clearly related to the original bullet.
 
+OUTCOME INVENTION (encouraged):
+- IF the original bullet lacks an outcome/impact, INVENT a plausible one based on:
+  * The activity and tools mentioned
+  * The business context
+  * The role's likely scope
+- Use conservative markers: "estimated", "~", "likely", "contributed to", "supported", "helped".
+
+TASK:
+Rewrite the bullet to be clearer, more impactful, and ATS-friendly.
+Return ONLY the rewritten bullet text (no prefix, no quotes).
+"""
 
 def build_bullet_rewrite_prompt(
     jd_text: str | None,
@@ -293,7 +344,7 @@ def build_bullet_rewrite_prompt(
     rewrite_hint: str | None = None,
     allowed_additions: list[str] | None = None,
 ) -> str:
-    """Build a prompt for rewriting a single bullet conservatively."""
+    """Build a prompt for rewriting a single bullet conservatively, with outcome invention allowed."""
     neighbor_text = "\n".join(neighbor_bullets or [])
     role_line = (
         f"Company: {role_info.get('company','')}\n"

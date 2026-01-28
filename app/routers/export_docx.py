@@ -25,7 +25,8 @@ from app.services.docx_exporter import (
     sanitize_name,
     export_docx_from_state,
 )
-from app.services.resume_state import parse_resume_text_to_state
+from app.services.resume_state import parse_resume_text_to_state, render_resume_text
+from app.services.outcome_enforcer import enforce_outcome_clauses
 from app.services.resume_store import (
     init_resume_record,
     append_resume_version,
@@ -336,6 +337,14 @@ async def export_docx(request: Request) -> ExportDocxResponse:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Claude generation failed: {exc}")
 
+    parsed_state = None
+    try:
+        parsed_state = parse_resume_text_to_state(resume_text)
+        enforce_outcome_clauses(parsed_state, payload.jd_text, structured_jd)
+        resume_text = render_resume_text(parsed_state)
+    except Exception as exc:
+        logger.warning("Outcome enforcement failed: %s", exc)
+
     result, docx_path = _save_export_artifacts(
         payload.company_name,
         payload.position_name,
@@ -348,7 +357,7 @@ async def export_docx(request: Request) -> ExportDocxResponse:
         result.audit = _audit_resume(resume_text, retrieved)
 
     try:
-        state = parse_resume_text_to_state(resume_text)
+        state = parsed_state or parse_resume_text_to_state(resume_text)
         resume_id = _new_resume_id(settings.generated_resumes_dir)
         init_resume_record(
             settings.generated_resumes_dir,

@@ -16,7 +16,8 @@ from app.services.domain_rewriter import rewrite_chunks, dedupe_chunks, grade_sk
 from app.services.experience_inventory import extract_experience_inventory
 from app.services.master_resume import select_master_resume, extract_experience_headers
 from app.services.parsing import read_text
-from app.services.resume_state import parse_resume_text_to_state
+from app.services.resume_state import parse_resume_text_to_state, render_resume_text
+from app.services.outcome_enforcer import enforce_outcome_clauses
 from app.services.resume_store import init_resume_record
 
 router = APIRouter()
@@ -269,11 +270,19 @@ async def generate(request: Request) -> GenerateResponse:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Claude generation failed: {exc}")
 
+    parsed_state = None
+    try:
+        parsed_state = parse_resume_text_to_state(resume_text)
+        enforce_outcome_clauses(parsed_state, req.jd_text, structured_jd)
+        resume_text = render_resume_text(parsed_state)
+    except Exception as exc:
+        logger.warning("Outcome enforcement failed: %s", exc)
+
     audit = _audit_resume(resume_text, retrieved) if req.audit else None
 
     resume_id = None
     try:
-        state = parse_resume_text_to_state(resume_text)
+        state = parsed_state or parse_resume_text_to_state(resume_text)
         resume_id = _new_resume_id(settings.generated_resumes_dir)
         init_resume_record(
             settings.generated_resumes_dir,

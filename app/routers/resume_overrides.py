@@ -15,7 +15,7 @@ from app.models.schemas import (
     IncludeSkillsResponse,
     OverrideSkill,
 )
-from app.services.resume_store import load_latest_state, append_resume_version, update_version_docx_path
+from app.services.resume_store import load_latest_state, append_resume_version, update_version_docx_path, load_latest_jd_text
 from app.services.resume_overrides import save_overrides, load_overrides
 from app.services.ats_scoring import score_resume_against_jd
 from app.services.resume_patches import apply_patches_to_state, apply_truth_guardrails, validate_patches_truth_mode, proof_bullet_template
@@ -23,6 +23,7 @@ from pathlib import Path
 from app.services.docx_exporter import export_docx_from_state
 from app.services.prompts import BULLET_REWRITE_SYSTEM_PROMPT, build_bullet_rewrite_prompt
 from app.services.claude_client import generate_with_claude
+from app.services.outcome_enforcer import enforce_outcome_clauses, ensure_outcome_clause
 
 
 router = APIRouter()
@@ -143,6 +144,9 @@ def apply_patches(resume_id: str, payload: ApplyPatchesRequest) -> ApplyPatchesR
     except (IndexError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    jd_text = load_latest_jd_text(settings.generated_resumes_dir, resume_id) or ""
+    enforce_outcome_clauses(state, jd_text)
+
     meta = append_resume_version(settings.generated_resumes_dir, resume_id, state)
     version = meta.get("latest_version")
     version_dir = settings.generated_resumes_dir / resume_id / version
@@ -222,6 +226,8 @@ def include_skills(resume_id: str, payload: IncludeSkillsRequest) -> IncludeSkil
         apply_patches_to_state(state, suggested)
     except (IndexError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+    enforce_outcome_clauses(state, payload.jd_text)
 
     meta = append_resume_version(settings.generated_resumes_dir, resume_id, state)
     version = meta.get("latest_version")
@@ -552,7 +558,7 @@ def _rewrite_override_bullet(role, skill: str, proof_bullet: str, jd_text: str) 
     if skill and _has_token(cleaned, skill) is False and _has_token(cleaned_proof, skill):
         return cleaned_proof
 
-    return cleaned
+    return ensure_outcome_clause(cleaned, jd_text)
 
 
 def _clean_bullet(text: str) -> str:
