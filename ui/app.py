@@ -76,45 +76,58 @@ html, body, [class*='css'] {
 }
 </style>""", unsafe_allow_html=True)
 
-st.markdown("""<div style='font-size:1.6rem;font-weight:600;'>Resume Generator</div>
+@st.dialog("Health Check")
+def _health_check_dialog():
+    st.text_input("Backend URL", key="backend_url_dialog", value=st.session_state.backend_url)
+    if st.session_state.get("backend_url_dialog"):
+        st.session_state.backend_url = st.session_state.backend_url_dialog
+    health = client.get("/health")
+    if health["ok"]:
+        st.success("Connected")
+        st.json(health["data"])
+    else:
+        st.error(f"Health check failed: {health['error']}")
+
+
+@st.dialog("Load Resume")
+def _load_resume_dialog():
+    st.text_input("Existing resume_id", value=st.session_state.resume_id, key="resume_id_input")
+    if st.button("Load Resume State", key="load_resume_dialog"):
+        resume_id_input = (st.session_state.get("resume_id_input") or "").strip()
+        if not resume_id_input:
+            st.error("Please enter a resume_id")
+        else:
+            res = client.get(f"/resumes/{resume_id_input}")
+            if res["ok"]:
+                st.session_state.resume_id = resume_id_input
+                st.session_state.resume_state = res["data"].get("state")
+                st.session_state.resume_text_preview = extract_resume_text(st.session_state.resume_state)
+                jd_loaded = res["data"].get("jd_text")
+                if jd_loaded:
+                    st.session_state.jd_text = jd_loaded
+                st.success("Loaded resume state")
+            else:
+                st.error(res["error"])
+
+
+header_left, header_right = st.columns([1.6, 1], gap="large")
+with header_left:
+    st.markdown("""<div style='font-size:1.6rem;font-weight:600;'>Resume Generator</div>
 <div style='color:#9aa4b2;margin-bottom:1rem;'>JD-driven resume builder with skill confirmation</div>""", unsafe_allow_html=True)
+with header_right:
+    btn_row = st.columns([3, 1, 1], gap="small")
+    with btn_row[1]:
+        if st.button("Health Check", key="health_check_top"):
+            _health_check_dialog()
+    with btn_row[2]:
+        if st.button("Load Resume", key="load_resume_top"):
+            _load_resume_dialog()
 
 col_left, col_right = st.columns([1, 1.15], gap='large')
 
 with col_left:
-    # A) Connection / Health
-    with st.expander("Connection / Health", expanded=True):
-        st.text_input("Backend URL", key="backend_url")
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("Health Check"):
-                health = client.get("/health")
-                if health["ok"]:
-                    st.success("Connected")
-                    st.json(health["data"])
-                else:
-                    st.error(f"Health check failed: {health['error']}")
-        with col2:
-            st.write("Backend URL can be changed and reloaded anytime.")
-
-    # Load existing resume_id
-    with st.expander("Load Existing Resume ID", expanded=False):
-        resume_id_input = st.text_input("Existing resume_id", value=st.session_state.resume_id)
-        if st.button("Load Resume State"):
-            if not resume_id_input.strip():
-                st.error("Please enter a resume_id")
-            else:
-                res = client.get(f"/resumes/{resume_id_input.strip()}")
-                if res["ok"]:
-                    st.session_state.resume_id = resume_id_input.strip()
-                    st.session_state.resume_state = res["data"].get("state")
-                    st.session_state.resume_text_preview = extract_resume_text(st.session_state.resume_state)
-                    jd_loaded = res["data"].get("jd_text")
-                    if jd_loaded:
-                        st.session_state.jd_text = jd_loaded
-                    st.success("Loaded resume state")
-                else:
-                    st.error(res["error"])
+    st.text_input("Backend URL", key="backend_url")
+    st.caption("Backend URL can be changed and reloaded anytime.")
 
     # B) Job Info + Generation
     with st.expander("Job Info + Generation", expanded=True):

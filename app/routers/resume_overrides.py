@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import re
 import logging
+import math
 
 from app.config import settings
 from app.models.schemas import (
@@ -48,15 +49,17 @@ def suggest_patches(resume_id: str, payload: SuggestPatchesRequest) -> SuggestPa
     tech_skill_added: set[str] = set()
 
     if overrides and overrides.skills:
+        tech_lines = list(state.sections.technical_skills or [])
         for entry in overrides.skills:
             skill = entry.skill
             if not skill:
                 continue
             skill_key = skill.strip().lower()
             if skill_key and skill_key not in tech_skill_added and not _skill_in_technical_skills(state, skill):
-                tech_patch = _build_technical_skill_patch(state, skill)
+                tech_patch = _build_technical_skill_patch(state, skill, tech_lines)
                 if tech_patch:
                     suggested.append(tech_patch)
+                    _apply_tech_patch_to_lines(tech_lines, tech_patch)
                 tech_skill_added.add(skill_key)
 
             for role_id in entry.target_roles:
@@ -338,15 +341,17 @@ def _build_patches_from_overrides(
     inserts_per_role: dict[str, int] = {}
     tech_skill_added: set[str] = set()
 
+    tech_lines = list(state.sections.technical_skills or [])
     for entry in overrides.skills:
         skill = entry.skill
         if not skill:
             continue
         skill_key = skill.strip().lower()
         if skill_key and skill_key not in tech_skill_added and not _skill_in_technical_skills(state, skill):
-            tech_patch = _build_technical_skill_patch(state, skill)
+            tech_patch = _build_technical_skill_patch(state, skill, tech_lines)
             if tech_patch:
                 suggested.append(tech_patch)
+                _apply_tech_patch_to_lines(tech_lines, tech_patch)
             tech_skill_added.add(skill_key)
 
         for role_id in entry.target_roles:
@@ -391,9 +396,9 @@ def _build_patches_from_overrides(
     return filtered, blocked
 
 
-def _build_technical_skill_patch(state, skill: str) -> PatchOperation | None:
+def _build_technical_skill_patch(state, skill: str, lines_override: list[str] | None = None) -> PatchOperation | None:
     """Insert skill into the best matching technical skills category."""
-    lines = state.sections.technical_skills or []
+    lines = lines_override if lines_override is not None else (state.sections.technical_skills or [])
     if not lines:
         return PatchOperation(
             section="technical_skills",
@@ -403,12 +408,30 @@ def _build_technical_skill_patch(state, skill: str) -> PatchOperation | None:
             skill=skill,
         )
 
-    other_idx = _find_other_skills_index(lines)
-    idx = _pick_skill_category_index(lines, skill)
+    other_idx = _normalize_index(_find_other_skills_index(lines))
+    idx = _normalize_index(_pick_skill_category_index(lines, skill))
     if idx is None and other_idx is not None:
         idx = other_idx
 
     if idx is None:
+        return PatchOperation(
+            section="technical_skills",
+            action="insert",
+            after_index=len(lines) - 1,
+            new_bullet=f"Other Skills: {skill.strip()}",
+            skill=skill,
+        )
+
+    if idx < 0 or idx >= len(lines):
+        return PatchOperation(
+            section="technical_skills",
+            action="insert",
+            after_index=len(lines) - 1,
+            new_bullet=f"Other Skills: {skill.strip()}",
+            skill=skill,
+        )
+
+    if idx is None or not isinstance(idx, int):
         return PatchOperation(
             section="technical_skills",
             action="insert",
@@ -424,7 +447,7 @@ def _build_technical_skill_patch(state, skill: str) -> PatchOperation | None:
     return PatchOperation(
         section="technical_skills",
         action="replace",
-        bullet_index=idx,
+        bullet_index=int(idx),
         new_bullet=updated,
         skill=skill,
     )
@@ -438,20 +461,30 @@ def _pick_skill_category_index(lines: list[str], skill: str) -> int | None:
         label = line.split(":", 1)[0].strip().lower()
         if not label:
             continue
-        categories.append((idx, label))
+        categories.append((idx, label, _label_family(label)))
 
     if not categories:
         return None
 
     skill_key = skill.strip().lower()
+    skill_family = _skill_family(skill_key)
+    if skill_family:
+        for idx, _, family in categories:
+            if family == skill_family and family != "other":
+                return idx
+
     hints = _category_hints_for_skill(skill_key)
     if hints:
-        for idx, label in categories:
+        for idx, label, _ in categories:
             if any(hint in label for hint in hints):
                 return idx
 
+    for idx, line in enumerate(lines):
+        if _has_token(line, skill_key):
+            return idx
+
     # Fallback: if label already contains the skill token, use that line.
-    for idx, label in categories:
+    for idx, label, _ in categories:
         if skill_key and skill_key in label:
             return idx
 
@@ -476,8 +509,110 @@ def _category_hints_for_skill(skill_key: str) -> list[str]:
         "aws": ["cloud"],
         "azure": ["cloud"],
         "gcp": ["cloud"],
+        "oracle": ["database"],
+        "postgres": ["database"],
+        "postgresql": ["database"],
+        "sql server": ["database"],
+        "dynamodb": ["database"],
+        "mysql": ["database"],
+        "data engineering": ["data", "etl", "ingestion", "pipeline"],
+        "data integration": ["data", "etl", "ingestion", "pipeline"],
+        "swagger": ["api", "documentation"],
+        "openapi": ["api", "documentation"],
+        "oauth": ["api", "security"],
+        "jwt": ["api", "security"],
+        "postman": ["api"],
     }
     return mapping.get(skill_key, [])
+
+
+def _label_family(label: str) -> str:
+    if "other skills" in label:
+        return "other"
+    if "database" in label or "db" in label:
+        return "database"
+    if "data integration" in label or "etl" in label or "ingest" in label or "data engineering" in label:
+        return "ingestion"
+    if "api" in label or "operations" in label:
+        return "api"
+    if "programming" in label or "language" in label:
+        return "programming"
+    if "cloud" in label or "devops" in label:
+        return "cloud"
+    if "tools" in label or "collaboration" in label:
+        return "tools"
+    if "quality assurance" in label or "testing" in label:
+        return "testing"
+    if "data modeling" in label or "model" in label:
+        return "modeling"
+    if "troubleshooting" in label or "analysis" in label:
+        return "analysis"
+    if "reporting" in label or "analytics" in label or "bi" in label:
+        return "reporting"
+    return ""
+
+
+def _skill_family(skill_key: str) -> str:
+    key = (skill_key or "").lower()
+    if any(token in key for token in ["postgres", "postgresql", "oracle", "sql server", "dynamodb", "mysql", "database"]):
+        return "database"
+    if any(token in key for token in ["etl", "elt", "ingest", "ingestion", "pipeline", "fivetran", "airflow", "kafka", "data engineering", "data integration"]):
+        return "ingestion"
+    if any(token in key for token in ["api", "rest", "fastapi", "flask", "express", "swagger", "openapi", "oauth", "jwt", "sso", "postman"]):
+        return "api"
+    if any(token in key for token in ["python", "java", "javascript", "typescript", "node", "c#", "golang"]):
+        return "programming"
+    if any(token in key for token in ["aws", "azure", "gcp", "docker", "kubernetes", "ci/cd", "devops", "jenkins", "gitlab"]):
+        return "cloud"
+    if any(token in key for token in ["tableau", "power bi", "looker", "dashboard", "reporting", "analytics", "bi"]):
+        return "reporting"
+    if any(token in key for token in ["data modeling", "dimensional", "schema design", "star schema"]):
+        return "modeling"
+    if any(token in key for token in ["testing", "qa", "uat", "unit testing", "integration testing", "regression testing"]):
+        return "testing"
+    if any(token in key for token in ["jira", "agile", "scrum", "git", "github"]):
+        return "tools"
+    if any(token in key for token in ["troubleshooting", "root cause", "analysis", "debug"]):
+        return "analysis"
+    return ""
+
+
+def _apply_tech_patch_to_lines(lines: list[str], patch: PatchOperation) -> None:
+    if patch.section != "technical_skills":
+        return
+    if patch.action == "replace":
+        if patch.bullet_index is None:
+            return
+        if 0 <= patch.bullet_index < len(lines):
+            lines[patch.bullet_index] = patch.new_bullet
+        return
+    if patch.action == "insert":
+        if patch.after_index is None:
+            return
+        insert_at = patch.after_index + 1
+        if insert_at < 0:
+            insert_at = 0
+        if insert_at > len(lines):
+            insert_at = len(lines)
+        lines.insert(insert_at, patch.new_bullet)
+
+
+def _normalize_index(value) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        return int(value)
+    try:
+        idx = int(value)
+    except (TypeError, ValueError):
+        return None
+    return idx
 
 
 def _insert_skill_into_line(line: str, skill: str) -> str | None:

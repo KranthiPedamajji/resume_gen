@@ -253,10 +253,12 @@ class PatchOperation(BaseModel):
     @model_validator(mode="after")
     def validate_action(self):
         if self.action == "replace":
-            if not self.role_id or self.bullet_index is None:
-                if self.section == "technical_skills":
+            if self.section == "technical_skills":
+                if self.bullet_index is None:
                     raise ValueError("replace for technical_skills requires bullet_index")
-                raise ValueError("replace requires role_id and bullet_index")
+            else:
+                if not self.role_id or self.bullet_index is None:
+                    raise ValueError("replace requires role_id and bullet_index")
         if self.action == "insert":
             if self.section == "experience" and not self.role_id:
                 raise ValueError("insert for experience requires role_id")
