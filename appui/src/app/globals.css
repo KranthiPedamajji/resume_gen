@@ -1,0 +1,68 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  background-color: #fff;
+  color: #171717;
+  margin: 0;
+}
+
+/* Global navbar shared across pages */
+.resume-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 64px;
+  background: #fff;
+  box-shadow: 0 2px 8px 0 rgba(30,41,59,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  padding: 0 2rem;
+  box-sizing: border-box;
+}
+
+.resume-navbar__brand {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #6366f1;
+  letter-spacing: -0.02em;
+}
+
+.resume-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.resume-nav-link {
+  text-decoration: none;
+  color: #1f2937;
+  font-weight: 600;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.resume-nav-link:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.app-main {
+  min-height: calc(100vh - 64px);
+  padding-top: 64px;
+  box-sizing: border-box;
+}
+
+/* Hide Next.js devtool floating button in dev env */
+[data-nextjs-devtools],
+#__next-dev-tools,
+#__next-dev-tools-button,
+[data-nextjs-dev-overlay],
+.nextjs-devtools-button {
+  display: none !important;
+}

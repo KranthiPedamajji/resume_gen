@@ -8,6 +8,20 @@ class IngestResponse(BaseModel):
     saved_files: List[str]
 
 
+class DeleteResumeResponse(BaseModel):
+    deleted: str
+    indexed_chunks: int
+    remaining_files: List[str]
+
+
+class ResumeListResponse(BaseModel):
+    files: List[str]
+
+
+class TemplateListResponse(BaseModel):
+    files: List[str]
+
+
 class GenerateRequest(BaseModel):
     jd_text: str = Field(..., min_length=20)
     top_k: int = Field(default=25, ge=5, le=60)

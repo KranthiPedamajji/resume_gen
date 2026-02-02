@@ -1,4 +1,5 @@
 ﻿from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.logging import setup_logging
 from app.routers.health import router as health_router
@@ -15,6 +16,19 @@ from app.routers.overrides_from_blocked import router as overrides_from_blocked_
 setup_logging()
 
 app = FastAPI(title="Resume RAG Generator (Phase 1)")
+
+# CORS for UI (adjust origins as needed)
+app.add_middleware(
+	CORSMiddleware,
+	allow_origins=[
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+	],
+	allow_credentials=True,
+	allow_methods=["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+	allow_headers=["*"],
+)
+
 app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(jd_router)

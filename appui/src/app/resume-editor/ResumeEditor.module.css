@@ -1,0 +1,250 @@
+/* Prevent page-level scroll; confine scrolling to internal panes */
+:global(html) {
+  height: 100%;
+  margin: 0;
+}
+
+:global(body) {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.page {
+  height: calc(100vh - 64px);
+  background: #fafafa;
+}
+
+.container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  background: #fafafa;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.sectionsTitle {
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  justify-content: center;
+}
+
+.sectionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: 0px
+}
+
+.sectionItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: #374151;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.sectionItem:hover {
+  background: #f3f4f6;
+}
+.sectionLabel {
+  flex: 1;
+}
+
+.sectionStatus {
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.sectionStatus.success {
+  background: #22c55e;
+}
+.sectionStatus.incomplete {
+  background: #d1d5db;
+}
+
+.main {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px;
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.previewCard {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  width: 100%;
+  max-width: 820px;
+  padding: 24px 24px;
+  margin-bottom: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.previewTitle {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.previewContent {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  background: #f3f4f6;
+  color: #6b7280;
+  text-align: left;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.previewSections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.previewSectionBlock {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+
+.previewSectionTitle {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+  color: #1f2937;
+}
+
+.previewSectionText {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.actions {
+  width: 450px;
+  background: #fff;
+  border-left: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 20px;
+  gap: 18px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.actionsTitle {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.actionsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 4px 12px 4px;
+}
+
+.actionButton {
+  background: #4F46E5;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.actionButton.secondary {
+  background: #fff;
+  color: #4F46E5;
+  border: 2px solid #4F46E5;
+}
+.actionButton.secondary:hover {
+  background: #F3F4F6;
+  color: #4338CA;
+}
+.actionButton:hover {
+  background: #4338CA;
+}
+
+/* ATS panel */
+.atsPanel {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.atsPanelHeader {
+  font-weight: 700;
+  color: #111827;
+}
+
+.atsScoreRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.atsScoreValue {
+  font-size: 32px;
+  font-weight: 700;
+  color: #4F46E5;
+}
+
+.atsScoreSuffix {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.atsBarTrack {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.atsBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 999px;
+}
+
+.atsHint {
+  font-size: 13px;
+  color: #4b5563;
+}
