@@ -54,7 +54,7 @@ def build_output_paths(company_name: str, position_name: str, job_id: str | None
     position = sanitize_name(position_name)
     suffix = sanitize_name(job_id) if job_id else "NOJOBID"
     folder_name = f"{position}_{suffix}"
-    return Path(r"C:\Users\krant\OneDrive\Desktop\resumes_tailored") / company / folder_name
+    return Path(r"S:\applications") / company / folder_name
 
 
 def parse_sections_from_resume_text(resume_text: str) -> Dict[str, List[str]]:
