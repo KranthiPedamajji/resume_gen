@@ -82,6 +82,9 @@ def _open_path_in_file_manager(path_value: str) -> tuple[bool, str]:
 
 def _export_docx_from_preview() -> bool:
     """Export using the edited preview text (no resume_id needed)."""
+    # reset status each attempt
+    st.session_state.status_export = ""
+    st.session_state.status_export_error = ""
     if not st.session_state.company_name or not st.session_state.position_name:
         st.session_state.status_export = "err"
         st.session_state.status_export_error = "company_name and position_name are required"
@@ -181,6 +184,18 @@ html, body, [class*='css'] {
   border-radius: 12px;
   padding: 1rem;
 }
+.copy-btn-inline {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.copy-btn-inline:hover {
+  background: #252b36;
+}
 /* Tighten vertical spacing between headings/sections */
 h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.35rem;
@@ -194,25 +209,25 @@ button[aria-label="Apply Edits to Resume"] {
 }
 </style>""", unsafe_allow_html=True)
 
-@st.dialog("Backend URL")
+@st.dialog("Test")
 def _backend_url_dialog():
     current = st.session_state.backend_url
-    st.text_input("Backend URL", key="backend_url_dialog", value=current)
+    st.text_input("Test", key="backend_url_dialog", value=current)
     candidate = (st.session_state.get("backend_url_dialog") or "").strip()
 
     action_cols = st.columns(2, gap="small")
     with action_cols[0]:
         if st.button("Save URL", key="save_backend_url_dialog"):
             if not candidate:
-                st.error("Backend URL cannot be empty")
+                st.error("Test cannot be empty")
             else:
                 st.session_state.backend_url = candidate
-                st.success("Backend URL updated")
+                st.success("Test updated")
                 st.rerun()
     with action_cols[1]:
         if st.button("Save + Health Check", key="save_health_backend_url_dialog"):
             if not candidate:
-                st.error("Backend URL cannot be empty")
+                st.error("Test cannot be empty")
             else:
                 st.session_state.backend_url = candidate
                 probe_client = ApiClient(candidate)
@@ -224,10 +239,10 @@ def _backend_url_dialog():
                     st.error(f"Health check failed: {health['error']}")
 
 
-@st.dialog("Load Resume")
+@st.dialog("Load")
 def _load_resume_dialog():
     st.text_input("Existing resume_id", value=st.session_state.resume_id, key="resume_id_input")
-    if st.button("Load Resume State", key="load_resume_dialog"):
+    if st.button("Load State", key="load_resume_dialog"):
         resume_id_input = (st.session_state.get("resume_id_input") or "").strip()
         if not resume_id_input:
             st.error("Please enter a resume_id")
@@ -415,7 +430,7 @@ with header_right:
     with top_right_controls[3]:
         export_target_top = _get_export_open_target(st.session_state.get("last_export_data"))
         open_disabled = not bool(export_target_top)
-        open_label = "Open Saved Location"
+        open_label = "Open Folder"
         if st.session_state.status_open == "ok":
             open_label = "✓ Opened"
         elif st.session_state.status_open == "err":
@@ -430,6 +445,11 @@ with header_right:
     with top_right_controls[4]:
         if st.button("ATS Popup", key="open_ats_popup_top"):
             _ats_score_dialog()
+    if st.session_state.status_export == "ok":
+        st.markdown("<span style='color:#48c774;font-size:0.9rem;'>✓ DOCX + JD saved</span>", unsafe_allow_html=True)
+    elif st.session_state.status_export == "err":
+        err_msg = st.session_state.get("status_export_error", "Save failed")
+        st.markdown(f"<span style='color:#ff4d4f;font-size:0.9rem;'>✕ {err_msg}</span>", unsafe_allow_html=True)
 
 col_left, col_right = st.columns([1, 1.15], gap='large')
 
@@ -736,7 +756,7 @@ with col_left:
                 st.info("No roles available")
 
 with col_right:
-    header_cols = st.columns([5, 1, 1])
+    header_cols = st.columns([5, 1])
     with header_cols[0]:
         if st.session_state.resume_id:
             st.markdown(
@@ -752,15 +772,6 @@ with col_right:
                 _apply_edits_to_resume(st.session_state.resume_text_preview)
         elif st.session_state.status_apply == "err":
             st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>❌ Edit failed</span>", unsafe_allow_html=True)
-    with header_cols[2]:
-        if st.session_state.resume_text_preview:
-            st.download_button(
-                label="Copy / Download",
-                data=st.session_state.resume_text_preview,
-                file_name="resume_preview.txt",
-                mime="text/plain",
-                key="download_resume_preview",
-            )
 
     if st.session_state.ats_report:
         report = st.session_state.ats_report
@@ -773,15 +784,40 @@ with col_right:
             st.write('Missing Preferred:', missing_preferred)
 
     if st.session_state.resume_text_preview:
-        st.markdown("**Resume Preview (editable)**")
+        copy_row = st.columns([5, 1])
+        with copy_row[0]:
+            st.markdown("**Resume Preview (editable)**")
+        with copy_row[1]:
+            st.markdown(
+                """
+                <div style="display:flex; justify-content:flex-end;">
+                  <button class="copy-btn-inline" aria-label="Copy resume" onclick="
+                    const ta = document.querySelector('textarea[aria-label=\\\\\"resume_preview_editor\\\\\"]');
+                    if (ta) {
+                      navigator.clipboard.writeText(ta.value).then(() => {
+                        this.innerText='✓';
+                        setTimeout(()=>{this.innerText='📋';},1200);
+                      }).catch(() => {
+                        this.innerText='✕';
+                        setTimeout(()=>{this.innerText='📋';},1200);
+                      });
+                    } else {
+                      this.innerText='✕';
+                      setTimeout(()=>{this.innerText='📋';},1200);
+                    }
+                  ">📋</button>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         edited = st.text_area(
-            "",
+            "resume_preview_editor",
             value=st.session_state.resume_text_preview,
             height=500,
             key="resume_preview_editor",
             label_visibility="collapsed",
         )
-        # Always keep preview in session state so Apply/Save uses latest edits
+        # Keep latest edits in session state
         st.session_state.resume_text_preview = edited
         st.caption("Use top Save DOCX button to export the edited text; apply edits persists to stored resume.")
     else:
