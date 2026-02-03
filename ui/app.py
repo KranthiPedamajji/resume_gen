@@ -405,12 +405,22 @@ with header_right:
         if st.button("Load Resume", key="load_resume_top"):
             _load_resume_dialog()
     with top_right_controls[2]:
-        if st.button("Save DOCX + JD", key="save_docx_quick_top"):
+        save_label = "Save DOCX + JD"
+        if st.session_state.status_export == "ok":
+            save_label = "✓ Saved"
+        elif st.session_state.status_export == "err":
+            save_label = "✕ Save failed"
+        if st.button(save_label, key="save_docx_quick_top"):
             _export_docx_from_preview()
     with top_right_controls[3]:
         export_target_top = _get_export_open_target(st.session_state.get("last_export_data"))
         open_disabled = not bool(export_target_top)
-        if st.button("Open Saved Location", key="open_saved_resume_location_top", disabled=open_disabled):
+        open_label = "Open Saved Location"
+        if st.session_state.status_open == "ok":
+            open_label = "✓ Opened"
+        elif st.session_state.status_open == "err":
+            open_label = "✕ Open failed"
+        if st.button(open_label, key="open_saved_resume_location_top", disabled=open_disabled):
             ok, msg = _open_path_in_file_manager(export_target_top or "")
             if ok:
                 st.session_state.status_open = "ok"
@@ -420,14 +430,6 @@ with header_right:
     with top_right_controls[4]:
         if st.button("ATS Popup", key="open_ats_popup_top"):
             _ats_score_dialog()
-    if st.session_state.status_export == "ok":
-        st.markdown("<span style='color:#52c41a; font-size:0.9rem;'>✓ Saved</span>", unsafe_allow_html=True)
-    elif st.session_state.status_export == "err":
-        st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>✕ Save failed</span>", unsafe_allow_html=True)
-    if st.session_state.status_open == "ok":
-        st.markdown("<span style='color:#52c41a; font-size:0.9rem;'>✓ Opened</span>", unsafe_allow_html=True)
-    elif st.session_state.status_open == "err":
-        st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>✕ Open failed</span>", unsafe_allow_html=True)
 
 col_left, col_right = st.columns([1, 1.15], gap='large')
 
