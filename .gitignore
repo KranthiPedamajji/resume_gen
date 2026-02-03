@@ -17,9 +17,8 @@ Thumbs.db
 .vscode/
 
 # Local data/output
-storage/resumes/
-!storage/resumes/template/
-!storage/resumes/template/**
+# Keep resume directories but ignore DOCX artifacts
+storage/resumes/**/*.docx
 storage/index/
 storage/generated_resumes/
 resumes/

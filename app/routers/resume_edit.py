@@ -3,12 +3,20 @@ from pathlib import Path
 import re
 
 from app.config import settings
-from app.models.schemas import BulletEditRequest, BulletEditResponse, ResumeStateResponse, BulletRewriteRequest, BulletRewriteResponse
+from app.models.schemas import (
+    BulletEditRequest,
+    BulletEditResponse,
+    ResumeStateResponse,
+    BulletRewriteRequest,
+    BulletRewriteResponse,
+    ResumeTextReplaceRequest,
+)
 from app.services.resume_store import (
     load_resume_state,
     append_resume_version,
     update_version_docx_path,
     load_latest_jd_text,
+    load_latest_resume_text,
 )
 from app.services.resume_overrides import load_overrides
 from app.services.docx_exporter import export_docx_from_state
@@ -28,8 +36,38 @@ def get_resume(resume_id: str) -> ResumeStateResponse:
         raise HTTPException(status_code=404, detail="resume_id not found")
 
     jd_text = load_latest_jd_text(settings.generated_resumes_dir, resume_id)
+    resume_text = load_latest_resume_text(settings.generated_resumes_dir, resume_id)
 
-    return ResumeStateResponse(resume_id=resume_id, version=version, state=state, jd_text=jd_text)
+    return ResumeStateResponse(resume_id=resume_id, version=version, state=state, jd_text=jd_text, resume_text=resume_text)
+
+
+@router.post("/resumes/{resume_id}/replace-text")
+def replace_resume_text(resume_id: str, payload: ResumeTextReplaceRequest) -> ResumeStateResponse:
+    """Replace entire resume text (preview edits) and store as new version without touching bullets."""
+    text = payload.resume_text.strip()
+    if len(text) < 20:
+        raise HTTPException(status_code=422, detail="resume_text too short")
+    try:
+        state, _ = load_resume_state(settings.generated_resumes_dir, resume_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="resume_id not found")
+
+    meta = append_resume_version(
+        settings.generated_resumes_dir,
+        resume_id,
+        state,
+        resume_text=text,
+        jd_text=payload.jd_text,
+    )
+    version = meta.get("latest_version")
+    jd_text = payload.jd_text or load_latest_jd_text(settings.generated_resumes_dir, resume_id)
+    return ResumeStateResponse(
+        resume_id=resume_id,
+        version=version,
+        state=state,
+        jd_text=jd_text,
+        resume_text=text,
+    )
 
 
 @router.patch("/resumes/{resume_id}/bullet", response_model=BulletEditResponse)

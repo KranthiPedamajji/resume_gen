@@ -22,6 +22,7 @@ class Settings(BaseModel):
     resumes_dir: Path = storage_dir / "resumes"
     index_dir: Path = storage_dir / "index"
     generated_resumes_dir: Path = storage_dir / "generated_resumes"
+    resume_output_dir: Path = Path(os.environ.get("RESUME_OUTPUT_DIR", r"C:\Users\krant\OneDrive\Desktop\resumes_tailored"))
 
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     docx_template_path: str = str(base_dir / "storage" / "resumes" / "template" / "template.docx")
@@ -32,3 +33,4 @@ settings = Settings()
 settings.resumes_dir.mkdir(parents=True, exist_ok=True)
 settings.index_dir.mkdir(parents=True, exist_ok=True)
 settings.generated_resumes_dir.mkdir(parents=True, exist_ok=True)
+settings.resume_output_dir.mkdir(parents=True, exist_ok=True)

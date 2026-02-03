@@ -35,6 +35,11 @@ def _init_state():
         "blocked_suggestions": None,
         "overrides_saved_count": 0,
         "last_export_data": None,
+        "status_export": "",
+        "status_load": "",
+        "status_generate": "",
+        "status_apply": "",
+        "status_open": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -75,29 +80,58 @@ def _open_path_in_file_manager(path_value: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
-def _save_docx_export() -> bool:
-    if not st.session_state.resume_id:
-        st.error("resume_id required")
-        return False
+def _export_docx_from_preview() -> bool:
+    """Export using the edited preview text (no resume_id needed)."""
     if not st.session_state.company_name or not st.session_state.position_name:
-        st.error("company_name and position_name are required")
+        st.session_state.status_export = "err"
+        st.session_state.status_export_error = "company_name and position_name are required"
+        return False
+    if not st.session_state.jd_text.strip():
+        st.session_state.status_export = "err"
+        st.session_state.status_export_error = "Job description is required"
+        return False
+    preview_text = (st.session_state.resume_text_preview or "").strip()
+    if not preview_text:
+        st.session_state.status_export = "err"
+        st.session_state.status_export_error = "Nothing to export"
         return False
 
     payload = {
-        "resume_id": st.session_state.resume_id,
         "company_name": st.session_state.company_name,
         "position_name": st.session_state.position_name,
         "job_id": st.session_state.job_id or None,
-        "jd_text": st.session_state.jd_text or None,
+        "jd_text": st.session_state.jd_text,
+        "resume_text": preview_text,
     }
-    res = client.post("/export-docx", json_body=payload)
-    if res["ok"]:
+    res = client.post("/export-docx-from-text", json_body=payload)
+    if res.get("ok"):
         st.session_state.last_export_data = res["data"]
-        st.success("Export complete")
-        st.json(res["data"])
+        st.session_state.status_export = "ok"
+        st.session_state.status_export_error = ""
         return True
 
-    st.error(res["error"])
+    st.session_state.status_export = "err"
+    st.session_state.status_export_error = res.get("error", "Export failed")
+    return False
+
+
+def _apply_edits_to_resume(preview_text: str) -> bool:
+    if not st.session_state.resume_id:
+        st.session_state.status_apply = "err"
+        st.session_state.status_apply_error = "resume_id required to persist edits"
+        return False
+    if not preview_text.strip():
+        st.session_state.status_apply = "err"
+        st.session_state.status_apply_error = "Edited text is empty"
+        return False
+    payload = {"resume_text": preview_text, "jd_text": st.session_state.jd_text}
+    res = client.post(f"/resumes/{st.session_state.resume_id}/replace-text", json_body=payload)
+    if res.get("ok"):
+        st.session_state.status_apply = "ok"
+        st.session_state.status_apply_error = ""
+        return True
+    st.session_state.status_apply = "err"
+    st.session_state.status_apply_error = res.get("error", "Failed to persist edits")
     return False
 
 
@@ -146,6 +180,17 @@ html, body, [class*='css'] {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1rem;
+}
+/* Tighten vertical spacing between headings/sections */
+h1, h2, h3, h4, h5, h6 {
+  margin-bottom: 0.35rem;
+  margin-top: 0.35rem;
+}
+.stMarkdown { margin-bottom: 0.25rem; }
+button[aria-label="Apply Edits to Resume"] {
+  padding: 0.45rem 0.95rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 600;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -196,6 +241,7 @@ def _load_resume_dialog():
                 if jd_loaded:
                     st.session_state.jd_text = jd_loaded
                 st.success("Loaded resume state")
+                st.rerun()
             else:
                 st.error(res["error"])
 
@@ -346,19 +392,42 @@ def _ats_score_dialog():
                     st.error(res["error"])
 
 
-header_left, header_right = st.columns([1.6, 1], gap="large")
+header_left, header_right = st.columns([1.6, 1.4], gap="large")
 with header_left:
     st.markdown("""<div style='font-size:1.6rem;font-weight:600;'>Resume Generator</div>
 <div style='color:#9aa4b2;margin-bottom:1rem;'>JD-driven resume builder with skill confirmation</div>""", unsafe_allow_html=True)
 with header_right:
-    top_right_controls = st.columns([1.2, 1, 1], gap="small")
-    with top_right_controls[1]:
+    top_right_controls = st.columns([1, 1, 1, 1, 1], gap="small")
+    with top_right_controls[0]:
         if st.button("Backend URL", key="backend_url_top"):
             _backend_url_dialog()
-    with top_right_controls[2]:
+    with top_right_controls[1]:
         if st.button("Load Resume", key="load_resume_top"):
             _load_resume_dialog()
-    st.caption(f"Backend: {st.session_state.backend_url}")
+    with top_right_controls[2]:
+        if st.button("Save DOCX + JD", key="save_docx_quick_top"):
+            _export_docx_from_preview()
+    with top_right_controls[3]:
+        export_target_top = _get_export_open_target(st.session_state.get("last_export_data"))
+        open_disabled = not bool(export_target_top)
+        if st.button("Open Saved Location", key="open_saved_resume_location_top", disabled=open_disabled):
+            ok, msg = _open_path_in_file_manager(export_target_top or "")
+            if ok:
+                st.session_state.status_open = "ok"
+            else:
+                st.session_state.status_open = "err"
+                st.session_state.status_open_error = msg
+    with top_right_controls[4]:
+        if st.button("ATS Popup", key="open_ats_popup_top"):
+            _ats_score_dialog()
+    if st.session_state.status_export == "ok":
+        st.markdown("<span style='color:#52c41a; font-size:0.9rem;'>✓ Saved</span>", unsafe_allow_html=True)
+    elif st.session_state.status_export == "err":
+        st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>✕ Save failed</span>", unsafe_allow_html=True)
+    if st.session_state.status_open == "ok":
+        st.markdown("<span style='color:#52c41a; font-size:0.9rem;'>✓ Opened</span>", unsafe_allow_html=True)
+    elif st.session_state.status_open == "err":
+        st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>✕ Open failed</span>", unsafe_allow_html=True)
 
 col_left, col_right = st.columns([1, 1.15], gap='large')
 
@@ -664,45 +733,33 @@ with col_left:
             else:
                 st.info("No roles available")
 
-    # G) Final Save to Folder (DOCX Export)
-    with st.expander("Final Save to Folder (DOCX Export)", expanded=False):
-        if st.button("Save DOCX + JD"):
-            _save_docx_export()
-
-        export_target = _get_export_open_target(st.session_state.get("last_export_data"))
-        if export_target:
-            st.caption(f"Saved path: {export_target}")
-            if st.button("Open Saved Resume Location", key="open_saved_resume_location"):
-                ok, msg = _open_path_in_file_manager(export_target)
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-
 with col_right:
-    st.markdown("### Quick Save")
-    quick_cols = st.columns([1, 1, 1], gap="small")
-    with quick_cols[0]:
-        if st.button("Save DOCX + JD", key="save_docx_quick_top"):
-            _save_docx_export()
-    with quick_cols[1]:
-        export_target_top = _get_export_open_target(st.session_state.get("last_export_data"))
-        open_disabled = not bool(export_target_top)
-        if st.button("Open Saved Location", key="open_saved_resume_location_top", disabled=open_disabled):
-            ok, msg = _open_path_in_file_manager(export_target_top or "")
-            if ok:
-                st.success(msg)
-            else:
-                st.error(msg)
-    with quick_cols[2]:
-        if st.button("ATS Popup", key="open_ats_popup_top"):
-            _ats_score_dialog()
-    if export_target_top:
-        st.caption(f"Latest saved path: {export_target_top}")
+    header_cols = st.columns([5, 1, 1])
+    with header_cols[0]:
+        if st.session_state.resume_id:
+            st.markdown(
+                f"<div style='font-size:1.1rem;font-weight:600;'>Resume Preview — Resume ID: <code>{st.session_state.resume_id}</code></div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown("<div style='font-size:1.1rem;font-weight:600;'>Resume Preview</div>", unsafe_allow_html=True)
+    with header_cols[1]:
+        if st.session_state.resume_text_preview:
+            btn_label = "✅" if st.session_state.status_apply == "ok" else ("❌" if st.session_state.status_apply == "err" else "Apply Edits")
+            if st.button(btn_label, key="persist_preview_edits"):
+                _apply_edits_to_resume(st.session_state.resume_text_preview)
+        elif st.session_state.status_apply == "err":
+            st.markdown("<span style='color:#ff4d4f; font-size:0.9rem;'>❌ Edit failed</span>", unsafe_allow_html=True)
+    with header_cols[2]:
+        if st.session_state.resume_text_preview:
+            st.download_button(
+                label="Copy / Download",
+                data=st.session_state.resume_text_preview,
+                file_name="resume_preview.txt",
+                mime="text/plain",
+                key="download_resume_preview",
+            )
 
-    st.markdown("### Resume Preview")
-    if st.session_state.resume_id:
-        st.markdown(f"**Resume ID:** `{st.session_state.resume_id}`")
     if st.session_state.ats_report:
         report = st.session_state.ats_report
         st.metric("ATS Score", report.get('ats_score', 0))
@@ -712,10 +769,22 @@ with col_right:
             st.write('Missing Required:', missing_required)
         if missing_preferred:
             st.write('Missing Preferred:', missing_preferred)
+
     if st.session_state.resume_text_preview:
-        st.code(st.session_state.resume_text_preview, language='')
+        st.markdown("**Resume Preview (editable)**")
+        edited = st.text_area(
+            "",
+            value=st.session_state.resume_text_preview,
+            height=500,
+            key="resume_preview_editor",
+            label_visibility="collapsed",
+        )
+        # Always keep preview in session state so Apply/Save uses latest edits
+        st.session_state.resume_text_preview = edited
+        st.caption("Use top Save DOCX button to export the edited text; apply edits persists to stored resume.")
     else:
         st.info('Generate or load a resume to see the preview.')
+
     if st.session_state.retrieved_chunks:
         with st.expander('Retrieved Chunks', expanded=False):
             st.json(st.session_state.retrieved_chunks)

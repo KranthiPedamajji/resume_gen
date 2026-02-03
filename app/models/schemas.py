@@ -192,6 +192,12 @@ class ResumeStateResponse(BaseModel):
     version: str
     state: ResumeState
     jd_text: Optional[str] = None
+    resume_text: Optional[str] = None
+
+
+class ResumeTextReplaceRequest(BaseModel):
+    resume_text: str = Field(..., min_length=20)
+    jd_text: Optional[str] = None
 
 
 class AtsScoreRequest(BaseModel):

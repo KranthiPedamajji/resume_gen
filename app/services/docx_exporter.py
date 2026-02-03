@@ -10,6 +10,7 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
 
 from app.models.schemas import ResumeState
+from app.config import settings
 
 
 _PLACEHOLDER_MAP = {
@@ -54,7 +55,7 @@ def build_output_paths(company_name: str, position_name: str, job_id: str | None
     position = sanitize_name(position_name)
     suffix = sanitize_name(job_id) if job_id else "NOJOBID"
     folder_name = f"{position}_{suffix}"
-    return Path(r"S:\applications") / company / folder_name
+    return settings.resume_output_dir / company / folder_name
 
 
 def parse_sections_from_resume_text(resume_text: str) -> Dict[str, List[str]]:

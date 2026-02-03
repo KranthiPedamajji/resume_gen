@@ -74,7 +74,7 @@ _S_TRIGGERS = re.compile(r"\band\s+S\s+triggers\b", re.IGNORECASE)
 _HEDGE_WORDS = re.compile(r"\b(estimated|likely|approximately|about)\b", re.IGNORECASE)
 _BULLET_LINE = re.compile(r"^\s*[-*\u2022]\s+")
 _TILDE_CHARS = re.compile(r"[~∼˜～]")
-_MAX_METRICS_PER_ROLE = 4
+_MAX_METRICS_PER_ROLE = 6  # cap metrics; excess will be converted to qualitative outcomes
 _METRIC_PHRASE_PATTERNS = (
     re.compile(
         r"\bby\s+an?\s+estimated\s+~?\d+(?:\.\d+)?(?:\s*[–-]\s*~?\d+(?:\.\d+)?)?\s*(?:%|ms|s|sec|seconds|minutes|hours|x|times)\b",
@@ -101,7 +101,7 @@ def _line_has_metric(line: str) -> bool:
     return bool(_END_CLIP.search(line) or _METRIC_RANGE.search(line) or _METRIC_TOKEN.search(line))
 
 
-def _soften_metric_phrase(line: str) -> str:
+def _soften_metric_phrase(line: str, qualitative: bool = False) -> str:
     softened = line
     for pattern in _METRIC_PHRASE_PATTERNS:
         softened = pattern.sub("", softened)
@@ -109,7 +109,13 @@ def _soften_metric_phrase(line: str) -> str:
     softened = _LONE_ESTIMATE.sub("", softened)
     softened = _DANGLING_METRIC.sub("", softened)
     softened = _TILDE_NO_NUMBER.sub("", softened)
+    softened = re.sub(r"\s+by\s*$", "", softened, flags=re.IGNORECASE)
     softened = re.sub(r"\s{2,}", " ", softened).rstrip(" ,.;:-")
+    if qualitative:
+        if softened.strip():
+            softened = softened.rstrip(" ,.;:-")
+            if not re.search(r"(reliab|stabil|quality|accuracy|freshness|risk|uptime|sla)", softened, re.IGNORECASE):
+                softened = softened + " improving reliability and consistency"
     return softened
 
 
@@ -118,25 +124,49 @@ def _postprocess_metrics_and_phrasing(resume_text: str) -> str:
     lines = resume_text.splitlines()
     out: list[str] = []
     metric_count = 0
+    role_buffer: list[str] = []
+
+    def flush_role():
+        nonlocal role_buffer, out
+        if not role_buffer:
+            return
+        metrics = []
+        non_metrics = []
+        for b in role_buffer:
+            if _line_has_metric(b.strip()):
+                metrics.append(b)
+            else:
+                non_metrics.append(b)
+        interleaved: list[str] = []
+        i = j = 0
+        while i < len(metrics) or j < len(non_metrics):
+            if i < len(metrics):
+                interleaved.append(metrics[i]); i += 1
+            if j < len(non_metrics):
+                interleaved.append(non_metrics[j]); j += 1
+        out.extend(interleaved)
+        role_buffer = []
 
     for raw_line in lines:
         line = _strip_tilde_symbols(raw_line)
         stripped = line.strip()
 
         if not stripped:
+            flush_role()
             out.append(line)
             continue
 
         if not _BULLET_LINE.match(stripped):
             metric_count = 0
+            flush_role()
             out.append(line)
             continue
 
         bullet = line
         if _line_has_metric(stripped):
             metric_count += 1
-            if metric_count > _MAX_METRICS_PER_ROLE:
-                bullet = _soften_metric_phrase(bullet)
+            if _MAX_METRICS_PER_ROLE and metric_count > _MAX_METRICS_PER_ROLE:
+                bullet = _soften_metric_phrase(bullet, qualitative=True)
 
         bullet = _DANGLING_ESTIMATE.sub("", bullet)
         bullet = _LONE_ESTIMATE.sub("", bullet)

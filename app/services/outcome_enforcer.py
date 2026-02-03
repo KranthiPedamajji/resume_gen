@@ -94,82 +94,82 @@ _METRIC_PATTERNS: list[tuple[str, str]] = [
 
 _METRIC_TEMPLATES: Dict[str, list[str]] = {
     "db_tuning": [
-        "reducing query time by an estimated ~20-30%",
-        "improving query performance by ~15-25%",
-        "lowering database latency by ~20%",
+        "reducing query time for key analytics paths",
+        "improving query performance for high-concurrency reads",
+        "lowering database latency on primary dashboards",
     ],
     "ingestion": [
-        "cutting error rates by ~15-20%",
-        "improving ingestion reliability by ~15-20%",
-        "increasing throughput by an estimated ~20%",
+        "keeping ingestion success within SLA windows",
+        "preventing reprocessing loops and failed reruns",
+        "maintaining stable throughput during peak loads",
     ],
     "reporting": [
-        "reducing reporting time by ~20%",
-        "improving dashboard refresh speed by ~15-25%",
-        "speeding up analytics delivery by ~20%",
+        "speeding up report refresh to meet stakeholder SLAs",
+        "keeping dashboard data fresh for daily reviews",
+        "shortening ad-hoc analytics turnaround for business users",
     ],
     "monitoring": [
-        "reducing MTTR by ~20-30%",
-        "improving incident response time by ~20%",
-        "increasing system uptime to ~99.5%",
+        "reducing MTTR through better alerting and runbooks",
+        "improving incident response time with actionable signals",
+        "keeping data services available for on-call rotations",
     ],
     "documentation": [
-        "reducing onboarding time by ~25%",
-        "improving internal adoption by ~20%",
-        "cutting support handoffs by ~15-20%",
+        "reducing onboarding time with clear runbooks and examples",
+        "increasing self-service adoption of data sets",
+        "cutting support handoffs via documented contracts",
     ],
     "api": [
-        "improving integration speed by ~20%",
-        "reducing API onboarding time by ~20%",
-        "increasing internal adoption by ~15%",
+        "improving integration speed with stable versioned contracts",
+        "reducing API onboarding time with samples and mocks",
+        "increasing internal adoption of shared services",
     ],
     "security": [
-        "reducing access-related incidents by ~10-15%",
-        "improving compliance readiness by ~20%",
-        "decreasing auth-related support tickets by ~15%",
+        "reducing access-related incidents with RBAC and audits",
+        "improving compliance readiness via standardized controls",
+        "lowering auth-related support tickets with safer defaults",
     ],
 }
 
 _OUTCOME_PATTERNS = {
     "pipeline": [
-        "ensuring {percentage}% uptime for critical data workflows",
-        "supporting daily data refresh for {count}+ downstream systems",
-        "processing {scale} records daily with {percentage}% accuracy",
+        "keeping critical data workflows within SLA and uptime targets",
+        "supporting daily data refresh for downstream systems",
+        "processing high-volume records while maintaining accuracy",
     ],
     "dashboard": [
-        "supporting {count}+ stakeholders with real-time insights",
-        "enabling {count}+ reporting use cases across the organization",
-        "reducing report generation time from hours to minutes",
+        "supporting stakeholders with timely, trustable insights",
+        "enabling key reporting use cases across the organization",
+        "reducing report generation friction for business users",
     ],
     "query": [
-        "optimizing data retrieval by an estimated {percentage}%",
-        "reducing execution time from {duration1} to {duration2}",
-        "supporting sub-second response times for {count}+ analytics queries",
+        "optimizing data retrieval for latency-sensitive queries",
+        "reducing execution time for common analytical workloads",
+        "supporting responsive experiences for analytics queries",
     ],
     "database": [
-        "supporting {count}+ concurrent users and {volume} TB+ data volume",
-        "enabling {count}+ monthly reporting requests",
-        "improving query performance by an estimated {percentage}%",
+        "supporting concurrent users and growing data volume reliably",
+        "enabling recurring reporting cycles without regressions",
+        "improving query performance for core datasets",
     ],
     "etl": [
-        "automating data ingestion for {count}+ data sources",
-        "reducing manual data processing time by an estimated {percentage}%",
-        "ensuring data freshness within {duration} for critical use cases",
+        "automating data ingestion across multiple sources with freshness guarantees",
+        "reducing manual data processing effort via repeatable pipelines",
+        "ensuring data freshness for critical use cases",
     ],
     "model": [
-        "supporting {count}+ downstream analytics use cases",
-        "improving data consistency across {count}+ reporting dimensions",
-        "enabling faster time-to-insight for business analysts",
+        "supporting downstream analytics use cases consistently",
+        "improving data consistency across reporting dimensions",
+        "enabling faster time-to-insight for analysts",
     ],
     "optimization": [
-        "improving performance by an estimated {percentage}%",
-        "reducing infrastructure costs by approximately {percentage}%",
-        "increasing system reliability to {percentage}%+ uptime",
+        "improving performance for key paths",
+        "reducing infrastructure costs through efficiency",
+        "increasing system reliability toward target uptime",
     ],
     "documentation": [
-        "improving team onboarding time by an estimated {percentage}%",
-        "enabling {count}+ team members to self-serve data access",
-        "reducing data engineering support requests by an estimated {percentage}%",
+        "improving team onboarding with clearer docs",
+        "enabling teams to self-serve data access",
+        "reducing data engineering support requests with better guidance",
     ],
 }
 
@@ -355,21 +355,12 @@ def _infer_outcome(bullet: str, domain: str) -> Optional[str]:
     if not best_category:
         return None
 
-    # Pick a random outcome template for this category
+    # Pick a consistent outcome template for this category
     templates = _OUTCOME_PATTERNS.get(best_category, [])
     if not templates:
         return None
 
     outcome = templates[0]  # Use first template for consistency
-
-    # Substitute placeholders with conservative values
-    outcome = outcome.replace("{percentage}", "~10-15")
-    outcome = outcome.replace("{count}", "several")
-    outcome = outcome.replace("{scale}", "thousands")
-    outcome = outcome.replace("{volume}", "a few")
-    outcome = outcome.replace("{duration}", "hours")
-    outcome = outcome.replace("{duration1}", "minutes")
-    outcome = outcome.replace("{duration2}", "seconds")
 
     if outcome.startswith("improving") or outcome.startswith("enabling"):
         return f"{bullet.rstrip('.')} {outcome}."

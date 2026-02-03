@@ -125,6 +125,16 @@ def load_resume_state(root_dir: Path, resume_id: str, version: Optional[str] = N
     return ResumeState(**data), version_name
 
 
+def load_latest_resume_text(root_dir: Path, resume_id: str) -> Optional[str]:
+    """Load latest resume.txt for a resume_id if available."""
+    resume_dir = root_dir / resume_id
+    meta = load_meta(resume_dir)
+    latest_txt = _latest_file(meta, "resume_txt")
+    if latest_txt and latest_txt.exists():
+        return latest_txt.read_text(encoding="utf-8")
+    return None
+
+
 def load_latest_state(root_dir: Path, resume_id: str) -> Tuple[ResumeState, str]:
     """Load the latest resume state."""
     return load_resume_state(root_dir, resume_id, version=None)

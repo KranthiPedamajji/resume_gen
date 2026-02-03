@@ -33,11 +33,16 @@ Each bullet MUST include an action plus an outcome (real or inferred conservativ
 
 STYLE & VARIETY RULES:
 - Avoid filler phrases; specifically, use phrases like "improve scalability"/"improving scalability" at most once per role.
-- Every bullet must pair Action + Outcome; include scope (data volume/RPS/pipelines/users) and impact. Prefer concrete metrics (latency, throughput, error rate, $/time savings, % change). If no metric is known, state a clear benefit (reliability, accuracy, freshness, SLA, risk reduction). It is OK to invent plausible ranges (e.g., "10-20%" or "reduced by seconds/minutes") when evidence is missing and reasonable for the role. Max 4 numeric metrics per role.
+ - Every bullet must pair Action + Outcome; include scope (data volume/RPS/pipelines/users) and impact. Prefer concrete metrics (latency, throughput, error rate, $/time savings, % change). If no metric is known, state a clear benefit (reliability, accuracy, freshness, SLA, risk reduction). Aim for 3–6 numeric metrics per role; use qualitative outcomes for the remaining bullets to avoid number overload; stay concise.
 - Vary phrasing across bullets; do NOT reuse the same closing clause more than once per role.
 - Preferred impact verbs: cut, reduced, decreased, lowered, shrank, saved, increased, boosted, raised, accelerated, shortened, improved by ~X%, avoided, prevented.
 - Weave tools into sentences (avoid parenthetical tool lists).
 - In TECHNICAL SKILLS, list skills only. Do NOT add qualifiers like "for JD alignment", "concepts", or "(Exposure/Familiarity)".
+- If the JD implies leadership/mentoring, ensure at least one bullet per relevant role shows leading, coaching, or guiding reviews, with a concrete effect on quality/velocity.
+- JD CRITICAL STACK (when present in the JD, MUST appear with hands-on evidence in bullets, not just skills): Python; Spark/PySpark; Airflow; AWS data stack (S3/Redshift/Athena/Glue/EMR); event-driven/pub-sub (Kafka/Flink or similar); CI/CD; observability (CloudWatch/Splunk/Datadog/Prometheus/Grafana). If the JD lists these, include at least one bullet per role set that shows usage and impact. If a critical item truly isn’t relevant, omit it; otherwise, prefer to include a concise proof bullet.
+- Keep the stack tight: prioritize JD-mentioned tools; for extra breadth keep at most one secondary backend language and one frontend framework unless the JD explicitly needs more. Avoid overpacking unrelated stacks that dilute focus.
+- Leadership placement rule: if total experience ≥5 years, include leadership/mentoring impact in the latest 1–2 roles; if total experience ~3 years, include at least one leadership/mentoring bullet in the latest role when the JD requires it.
+- Every role must show good engineering hygiene: include one bullet about logging/metrics/alerting (rotate tools, e.g., CloudWatch/Splunk/Datadog/Grafana) and one about quality practices (code reviews, unit/integration testing, CI gates); avoid repeating the exact same tool set across roles.
 """
 
 _MONTH_RE = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}"
