@@ -25,3 +25,4 @@ resumes/
 
 # Logs
 *.log
+storage/resumes/**/*.docx
